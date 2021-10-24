@@ -238,7 +238,7 @@ def help(rc=0):
     print("Arguments:")
     print("  [-p password] <host>                            - Access the remote REPL")
     print("  [-p password] <host>:<remote_file> <local_file> - Copy remote file to local file")
-    print("  [-p password] <local_file> <host>:<remote_file> - Copy local file to remote file")
+    print("  [-p password] [-r/--reset] <local_file> <host>:<remote_file> - Copy local file to remote file and optionally reset after")
     print("Examples:")
     print("  %s 192.168.4.1" % exename)
     print("  %s script.py 192.168.4.1:/another_name.py" % exename)
@@ -268,8 +268,14 @@ def main():
             sys.argv.pop(i)
             passwd = sys.argv.pop(i)
             break
+    do_reset = False
+    for i in range(len(sys.argv)):
+        if sys.argv[i] == '--reset' or sys.argv[i] == '-r' :
+            sys.argv.pop(i)
+            do_reset = True
+            break
 
-    if len(sys.argv) not in (2, 3):
+    if len(sys.argv) not in (2, 3, 4):
         help(1)
 
     if passwd is None:
@@ -328,6 +334,18 @@ def main():
         get_file(ws, dst_file, src_file)
     elif op == "put":
         put_file(ws, src_file, dst_file)
+        if do_reset:
+            print('Resetting...')
+            # ws.write only sends binary data, so we need to instead send the
+            # appropriate header for "text" data to send control characters
+            text_hdr = struct.pack(">BB", 0x81, 1)
+            s.send(text_hdr)
+            s.send(b'\x03')  #ctrl-c to interrupt whatever might be happening
+            #print(s.recv(1000))
+            s.send(text_hdr)
+            s.send(b'\x04')  #ctrl-d
+            #print(s.recv(1000))
+
 
     s.close()
 

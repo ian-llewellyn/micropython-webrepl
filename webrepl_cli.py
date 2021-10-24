@@ -182,6 +182,25 @@ def do_repl(ws):
         console.exit()
 
 
+def do_cmd(ws, cmd):
+    #cmd = bytes(cmd.replace('\n', '\r'), 'utf-8')
+    cmd = bytes(cmd, 'utf-8')
+    #print(cmd)
+    ws.write(b'\x05' + cmd + b'\x04', frame=WEBREPL_FRAME_TXT)
+    buf = b''
+    try:
+        while True:
+            ch = ws.read(1, text_ok=True)
+            buf += ch
+            #print(buf, ch)
+            if buf[-4:] == b'>>> ':
+                break
+    except:
+        pass
+    return buf[len(cmd) + 56:-6].decode('utf-8').replace('\r', '').rstrip('\n')
+    return buf.decode('utf-8')
+
+
 def put_file(ws, local_file, remote_file):
     sz = os.stat(local_file)[6]
     dest_fname = (SANDBOX + remote_file).encode("utf-8")
@@ -237,6 +256,7 @@ def help(rc=0):
     )
     print("Arguments:")
     print("  [-p password] <host>                            - Access the remote REPL")
+    print("  [-p password] <host> -c <command>               - Run command on remote host and return the result")
     print("  [-p password] <host>:<remote_file> <local_file> - Copy remote file to local file")
     print("  [-p password] [-r/--reset] <local_file> <host>:<remote_file> - Copy local file to remote file and optionally reset after")
     print("Examples:")
@@ -274,6 +294,11 @@ def main():
             sys.argv.pop(i)
             do_reset = True
             break
+    for i in range(len(sys.argv)):
+        if sys.argv[i] == '-c':
+            op = 'cmd'
+            cmd = sys.argv[i+1]
+            break
 
     if len(sys.argv) not in (2, 3, 4):
         help(1)
@@ -282,7 +307,7 @@ def main():
         import getpass
         passwd = getpass.getpass()
 
-    if len(sys.argv) > 2:
+    if len(sys.argv) > 2 and op != 'cmd':
         if ":" in sys.argv[1] and ":" in sys.argv[2]:
             error("Operations on 2 remote files are not supported")
         if ":" not in sys.argv[1] and ":" not in sys.argv[2]:
@@ -291,14 +316,16 @@ def main():
     if len(sys.argv) == 2:
         op = "repl"
         host, port, _ = parse_remote(sys.argv[1] + ":")
-    elif ":" in sys.argv[1]:
+    elif op == 'cmd':
+        host, port, _ = parse_remote(sys.argv[1] + ":")
+    elif ":" in sys.argv[1] and op != 'cmd':
         op = "get"
         host, port, src_file = parse_remote(sys.argv[1])
         dst_file = sys.argv[2]
         if os.path.isdir(dst_file):
             basename = src_file.rsplit("/", 1)[-1]
             dst_file += "/" + basename
-    else:
+    elif op != 'cmd':
         op = "put"
         host, port, dst_file = parse_remote(sys.argv[2])
         src_file = sys.argv[1]
@@ -330,6 +357,8 @@ def main():
 
     if op == "repl":
         do_repl(ws)
+    elif op == 'cmd':
+        print(do_cmd(ws, cmd))
     elif op == "get":
         get_file(ws, dst_file, src_file)
     elif op == "put":

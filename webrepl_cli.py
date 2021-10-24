@@ -336,16 +336,8 @@ def main():
         put_file(ws, src_file, dst_file)
         if do_reset:
             print('Resetting...')
-            # ws.write only sends binary data, so we need to instead send the
-            # appropriate header for "text" data to send control characters
-            text_hdr = struct.pack(">BB", 0x81, 1)
-            s.send(text_hdr)
-            s.send(b'\x03')  #ctrl-c to interrupt whatever might be happening
-            #print(s.recv(1000))
-            s.send(text_hdr)
-            s.send(b'\x04')  #ctrl-d
-            #print(s.recv(1000))
-
+            ws.write(b'\x03', frame=WEBREPL_FRAME_TXT)  #ctrl-c to interrupt whatever might be happening
+            ws.write(b'\x04', frame=WEBREPL_FRAME_TXT)  #ctrl-d
 
     s.close()
 

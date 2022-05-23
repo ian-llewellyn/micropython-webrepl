@@ -7,7 +7,6 @@ try:
     import usocket as socket
 except ImportError:
     import socket
-import websocket_helper
 
 # Define to 1 to use builtin "uwebsocket" module of MicroPython
 USE_BUILTIN_UWEBSOCKET = 0
@@ -318,6 +317,7 @@ def main():
 
     s.connect(addr)
     #s = s.makefile("rwb")
+    import websocket_helper
     websocket_helper.client_handshake(s)
 
     ws = websocket(s)

@@ -183,22 +183,24 @@ def do_repl(ws):
 
 
 def do_cmd(ws, cmd):
-    #cmd = bytes(cmd.replace('\n', '\r'), 'utf-8')
     cmd = bytes(cmd, 'utf-8')
-    #print(cmd)
-    ws.write(b'\x05' + cmd + b'\x04', frame=WEBREPL_FRAME_TXT)
+    # PASTE_MODE     = b'\x05' # Ctrl+E
+    ws.write(b'\x05' + cmd, frame=WEBREPL_FRAME_TXT)
+
+    # Clear as much of the buffer as possible
+    ws.read(1, text_ok=True)
+    ws.buf = b""
+
+    # END_PASTE_MODE = b'\x04' # Ctrl+D
+    ws.write(b'\x04', frame=WEBREPL_FRAME_TXT)
+
     buf = b''
-    try:
-        while True:
-            ch = ws.read(1, text_ok=True)
-            buf += ch
-            #print(buf, ch)
-            if buf[-4:] == b'>>> ':
-                break
-    except:
-        pass
-    return buf[len(cmd) + 56:-6].decode('utf-8').replace('\r', '').rstrip('\n')
-    return buf.decode('utf-8')
+    while True:
+        ch = ws.read(1, text_ok=True)
+        buf += ch
+        if buf[-4:] == b'>>> ':
+            break
+    return buf[len(cmd):-4].decode('utf-8').replace('\r', '').strip('\n')
 
 
 def put_file(ws, local_file, remote_file):
@@ -282,6 +284,7 @@ def parse_remote(remote):
 
 
 def main():
+    op = ''
     passwd = None
     for i in range(len(sys.argv)):
         if sys.argv[i] == '-p':
@@ -334,7 +337,7 @@ def main():
             dst_file += basename
 
     if True:
-        print("op:%s, host:%s, port:%d, passwd:%s." % (op, host, port, passwd))
+        print("op:%s, host:%s, port:%d, passwd:%s." % (op, host, port, passwd), file=sys.stderr)
         if op in ("get", "put"):
             print(src_file, "->", dst_file)
 
@@ -350,7 +353,7 @@ def main():
     ws = websocket(s)
 
     login(ws, passwd)
-    print("Remote WebREPL version:", get_ver(ws))
+    print("Remote WebREPL version:", get_ver(ws), file=sys.stderr)
 
     # Set websocket to send data marked as "binary"
     ws.ioctl(9, 2)
@@ -359,6 +362,10 @@ def main():
         do_repl(ws)
     elif op == 'cmd':
         print(do_cmd(ws, cmd))
+        if do_reset:
+            print('Resetting...', file=sys.stderr)
+            ws.write(b'\x03', frame=WEBREPL_FRAME_TXT)  #ctrl-c to interrupt whatever might be happening
+            ws.write(b'\x04', frame=WEBREPL_FRAME_TXT)  #ctrl-d
     elif op == "get":
         get_file(ws, dst_file, src_file)
     elif op == "put":
